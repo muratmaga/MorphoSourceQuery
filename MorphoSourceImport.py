@@ -20,7 +20,7 @@ base_url = "https://www.morphosource.org/api/v1/find/"
 end_url = "&sort=specimen.element,taxonomy_names.ht_order"
 warnings.simplefilter('ignore',InsecureRequestWarning)
 slicer.userNameDefault = "SlicerMorph@gmail.com"
-slicer.passwordDefault = "SlicerMorph"
+slicer.passwordDefault = ""
 
 
 class MorphoSourceImport(ScriptedLoadableModule):
