@@ -248,7 +248,7 @@ class MorphoSourceImportLogic(ScriptedLoadableModuleLogic):
   def runImport(self, dataFrame, session):
     for index in dataFrame.index:
       print('Downloading file for specimen ID ' + dataFrame['specimen_id'][index])
-      response = session.get(dataFrame.iloc[index].at['download_link'])
+      response = session.get(dataFrame['download_link'][index])
       zip_file = zipfile.ZipFile(io.BytesIO(response.content))
       extensions = ('.stl','.ply', '.obj')
       model=[zip_file.extract(file,slicer.app.defaultScenePath) for file in zip_file.namelist() if file.endswith(extensions)]
