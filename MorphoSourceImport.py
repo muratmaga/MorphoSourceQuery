@@ -12,6 +12,8 @@ import pandas as pd
 import math
 import warnings
 from requests.packages.urllib3.exceptions import InsecureRequestWarning
+import zipfile
+import io
 #
 # MorphoSourceImport
 #
@@ -205,7 +207,7 @@ class MorphoSourceImportWidget(ScriptedLoadableModuleWidget):
       selectionList.append(selection[i].row())
     selectedResults = self.result_dataframe.iloc[selectionList]
     logic = MorphoSourceImportLogic()
-    logic.runImport(selectedResults)
+    logic.runImport(selectedResults, self.session)
     
 class LogDataObject:
   """This class i
@@ -232,8 +234,12 @@ class MorphoSourceImportLogic(ScriptedLoadableModuleLogic):
   Uses ScriptedLoadableModuleLogic base class, available at:
   https://github.com/Slicer/Slicer/blob/master/Base/Python/slicer/ScriptedLoadableModule.py
   """
-  def runImport(self, dataFrame):
-    print(dataFrame.download_link)
+  def runImport(self, dataFrame, session):
+    response = session.get(dataFrame.iloc[0].at['download_link'])
+    zip_file = zipfile.ZipFile(io.BytesIO(response.content))
+    extensions = ('.stl','.ply', '.obj')
+    model=[zip_file.extract(file,slicer.app.defaultScenePath) for file in zip_file.namelist() if file.endswith(extensions)]
+    slicer.util.loadModel(model[0])
      
   def process_json(self,response_json, session):
     #Initializing the database
@@ -307,7 +313,7 @@ class MorphoSourceImportLogic(ScriptedLoadableModuleLogic):
     login_url = 'http://www.morphosource.org/LoginReg/login'
     headers = {'Content-Type': 'application/x-www-form-urlencoded'}
     data = 'username=' + username +'&password=' + password
-    login_result = session_requests.post(login_url, headers = headers, data = data, verify= False) #I modified this part for tests, but we should probably talk about SSL certification
+    login_result = session_requests.post(login_url, params= data, verify= False)
     print("Attempting log in: ", login_result.ok)
     return session_requests
 
