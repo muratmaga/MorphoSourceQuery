@@ -8,12 +8,12 @@ import logging
 import numpy as np
 import string
 import requests
-import pandas as pd
 import math
 import warnings
 from requests.packages.urllib3.exceptions import InsecureRequestWarning
 import zipfile
 import io
+
 #
 # MorphoSourceImport
 #
@@ -40,9 +40,18 @@ class MorphoSourceImport(ScriptedLoadableModule):
 This module provides a keyword search to query and load 3D models from the MorphoSource database into the 3D Slicer scene.
 """
     self.parent.acknowledgementText = """
-This module was developed by Sara Rolfe and Murat Maga, for the NSF HDR  grant, "Biology Guided Neural Networks" (Award Number: 1939505).
+This module was developed by Sara Rolfe and  Murat Maga, for the NSF HDR  grant, "Biology Guided Neural Networks" (Award Number: 1939505).
 https://www.nsf.gov/awardsearch/showAward?AWD_ID=1939505&HistoricalAwards=false
 """
+    slicer.app.connect("startupCompleted()", self.checkPythonPackages)
+  
+  def checkPythonPackages(self):
+    print('Checking for required python packages')
+    try:
+      import pandas as pd
+    except:
+      slicer.util.pip_install('pandas')
+    import pandas as pd
 
 #
 # MorphoSourceImportWidget
@@ -139,6 +148,7 @@ class MorphoSourceImportWidget(ScriptedLoadableModuleWidget):
     self.resultsTable = qt.QTableView()
     self.resultsTable.horizontalHeader().stretchLastSection = True
     self.resultsTable.horizontalHeader().visible = False
+    self.resultsTable.verticalHeader().visible = False
     self.resultsTable.setSelectionBehavior(qt.QAbstractItemView().SelectRows)
     self.resultsTable.setModel(self.resultsModel)
     resultsFormLayout.addRow(self.resultsTable)
@@ -180,7 +190,7 @@ class MorphoSourceImportWidget(ScriptedLoadableModuleWidget):
 
   def onSubmitQuery(self):
       self.resultsTable.model().clear() # clear result from any previous run
-      queryDictionary =	{
+      queryDictionary =  {
         "order": self.orderInput.text,
         "element": self.elementInput.text
       }
@@ -234,12 +244,15 @@ class MorphoSourceImportLogic(ScriptedLoadableModuleLogic):
   Uses ScriptedLoadableModuleLogic base class, available at:
   https://github.com/Slicer/Slicer/blob/master/Base/Python/slicer/ScriptedLoadableModule.py
   """
+  
   def runImport(self, dataFrame, session):
-    response = session.get(dataFrame.iloc[0].at['download_link'])
-    zip_file = zipfile.ZipFile(io.BytesIO(response.content))
-    extensions = ('.stl','.ply', '.obj')
-    model=[zip_file.extract(file,slicer.app.defaultScenePath) for file in zip_file.namelist() if file.endswith(extensions)]
-    slicer.util.loadModel(model[0])
+    for index in dataFrame.index:
+      print('Downloading file for specimen ID ' + dataFrame['specimen_id'][index])
+      response = session.get(dataFrame.iloc[index].at['download_link'])
+      zip_file = zipfile.ZipFile(io.BytesIO(response.content))
+      extensions = ('.stl','.ply', '.obj')
+      model=[zip_file.extract(file,slicer.app.defaultScenePath) for file in zip_file.namelist() if file.endswith(extensions)]
+      slicer.util.loadModel(model[0])
      
   def process_json(self,response_json, session):
     #Initializing the database
@@ -305,7 +318,7 @@ class MorphoSourceImportLogic(ScriptedLoadableModuleLogic):
     for i in range(downloadInfo.size):
       if 'http' in downloadInfo[i]:
         validFileIndexes.append(i)
-    return dataFrame.iloc[validFileIndexes].reset_index()
+    return dataFrame.iloc[validFileIndexes].reset_index(drop=True)
       
     
   def runLogin(self, username, password):
