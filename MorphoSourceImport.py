@@ -105,14 +105,14 @@ class MorphoSourceImportWidget(ScriptedLoadableModuleWidget):
     # Username input
     #
     self.orderInput = qt.QLineEdit()
-    self.orderInput.setToolTip( "Input the the specimen order, eg: 'cranium' " )
+    self.orderInput.setToolTip( "Input the the specimen order, eg: 'Euprimates' " )
     parametersFormLayout.addRow("Query order: ", self.orderInput)
 
     #
     # Username input
     #
     self.elementInput = qt.QLineEdit()
-    self.elementInput.setToolTip( "Input the speciment element, eg: 'primates' " )
+    self.elementInput.setToolTip( "Input the speciment element, eg: 'Cranuim' " )
     parametersFormLayout.addRow("Query element: ", self.elementInput)
 
     #
@@ -120,9 +120,31 @@ class MorphoSourceImportWidget(ScriptedLoadableModuleWidget):
     # Submit query Button
     #
     self.submitQueryButton = qt.QPushButton("Submit query")
-    self.submitQueryButton.toolTip = "Run the algorithm."
+    self.submitQueryButton.toolTip = "Query the MorphoSource database for 3D models. This may take a few minutes."
     self.submitQueryButton.enabled = False
     parametersFormLayout.addRow(self.submitQueryButton)
+    
+    #
+    # Query results area
+    #
+    resultsCollapsibleButton = ctk.ctkCollapsibleButton()
+    resultsCollapsibleButton.text = "Query results:"
+    resultsCollapsibleButton.collapsed = False
+    self.layout.addWidget(resultsCollapsibleButton)
+    resultsFormLayout = qt.QFormLayout(resultsCollapsibleButton)
+
+    self.resultsModel = qt.QStandardItemModel()
+    self.resultsTable = qt.QTableView()
+    self.resultsTable.horizontalHeader().stretchLastSection = True
+    self.resultsTable.horizontalHeader().visible = False
+    self.resultsTable.setSelectionBehavior(qt.QAbstractItemView().SelectRows)
+    self.resultsTable.setModel(self.resultsModel)
+    resultsFormLayout.addRow(self.resultsTable)
+
+    self.loadResultsButton = qt.QPushButton("Load selected models")
+    self.loadResultsButton.toolTip = "Load the selected models into the scene."
+    self.loadResultsButton.enabled = False
+    resultsFormLayout.addRow(self.loadResultsButton)
 
 
     # connections
@@ -132,6 +154,7 @@ class MorphoSourceImportWidget(ScriptedLoadableModuleWidget):
     self.orderInput.connect('textChanged(const QString &)', self.onQueryStringChanged)
     self.elementInput.connect('textChanged(const QString &)', self.onQueryStringChanged)
     self.submitQueryButton.connect('clicked(bool)', self.onSubmitQuery)
+    self.loadResultsButton.connect('clicked(bool)', self.onLoadResults)
 
     # Add vertical spacer
     self.layout.addStretch(1)
@@ -154,14 +177,36 @@ class MorphoSourceImportWidget(ScriptedLoadableModuleWidget):
     self.session = logic.runLogin(self.userNameInput.text, self.passwordInput.text)
 
   def onSubmitQuery(self):
+      self.resultsTable.model().clear() # clear result from any previous run
       queryDictionary =	{
         "order": self.orderInput.text,
         "element": self.elementInput.text
       }
       logic = MorphoSourceImportLogic()
-      logic.runQuery(queryDictionary, self.session)
+      self.result_dataframe = logic.runQuery(queryDictionary, self.session)
+      if not self.result_dataframe.empty:
+        self.populateTable()
+        self.loadResultsButton.enabled = True
 
-
+  def populateTable(self):
+    self.resultsTable.horizontalHeader().visible = True
+    self.resultsModel.setHorizontalHeaderLabels(self.result_dataframe.columns)
+    [rowCount,columnCount]=self.result_dataframe.shape
+    for i in range(rowCount):
+      for j in range(columnCount):
+        item = qt.QStandardItem()
+        item.setText(self.result_dataframe.iloc[i,j])
+        self.resultsModel.setItem(i, j, item)
+  
+  def onLoadResults(self):
+    selection = self.resultsTable.selectionModel().selectedRows()
+    selectionList = []
+    for i in range(len(selection)):
+      selectionList.append(selection[i].row())
+    selectedResults = self.result_dataframe.iloc[selectionList]
+    logic = MorphoSourceImportLogic()
+    logic.runImport(selectedResults)
+    
 class LogDataObject:
   """This class i
      """
@@ -187,27 +232,28 @@ class MorphoSourceImportLogic(ScriptedLoadableModuleLogic):
   Uses ScriptedLoadableModuleLogic base class, available at:
   https://github.com/Slicer/Slicer/blob/master/Base/Python/slicer/ScriptedLoadableModule.py
   """
+  def runImport(self, dataFrame):
+    print(dataFrame.download_link)
+     
   def process_json(self,response_json, session):
+    #Initializing the database
+    database=[]
+    #Finding the surface files and querying for the corresponding specimen information
+    for result in response_json['results']:
+      for media in result['medium.media']:
+        if media['mimetype'] in ['application/ply','application/obj','application/stl']:
+          #Querying for specimen information (accessed through a separate query)
+          file_id=result['specimen.specimen_id']
+          query_id = f"{base_url}specimens?q=specimen.specimen_id:{file_id}{end_url}"
+          response = session.get(query_id).json()
+          taxa = response['results'][0]['taxonomy_name'][0]['names'][0]
 
-      #Initializing the database
-      database=[]
-      #Finding the surface files and querying for the corresponding specimen information
-      for result in response_json['results']:
-          for media in result['medium.media']:
-              if media['mimetype'] in ['application/ply','application/obj','application/stl']:
-
-                  #Querying for specimen information (accessed through a separate query)
-                  file_id=result['specimen.specimen_id']
-                  query_id = f"{base_url}specimens?q=specimen.specimen_id:{file_id}{end_url}"
-                  response = session.get(query_id).json()
-                  taxa = response['results'][0]['taxonomy_name'][0]['names'][0]
-
-                  #Generating the database
-                  database.append({'order': taxa['ht_order'], 'genus': taxa['genus'], 'species': taxa['species'],
-                    'filetype': media['mimetype'][-3:], 'filesize': media['filesize'],
-                    'element': media['element'], 'download_link': media['download'],
-                    'media_file_id': media['media_file_id'], 'specimen_id': result['specimen.specimen_id'], 'project_id': result['project.project_id']})
-      return database
+          #Generating the database
+          database.append({'order': taxa['ht_order'], 'genus': taxa['genus'], 'species': taxa['species'],
+            'filetype': media['mimetype'][-3:], 'filesize': media['filesize'],
+            'element': media['element'], 'download_link': media['download'],
+            'media_file_id': media['media_file_id'], 'specimen_id': result['specimen.specimen_id'], 'project_id': result['project.project_id']})
+    return database
 
   def findDownload(self, query, session):
 
@@ -223,16 +269,14 @@ class MorphoSourceImportLogic(ScriptedLoadableModuleLogic):
 
     #Iterating through resulting pages
     for page in range(page_number):
-        sub_query = session.get(f"{query_string[:-1]}{str(page)}")
-        try:
-            decoded_json = sub_query.json()
-            database = database + self.process_json(decoded_json,session)
-        except:
-            error_count += 1
-            print(f'A total of {error_count} pages could not be decoded')
-
+      sub_query = session.get(f"{query_string[:-1]}{str(page)}")
+      try:
+        decoded_json = sub_query.json()
+        database = database + self.process_json(decoded_json,session)
+      except:
+        error_count += 1
+        print(f'A total of {error_count} pages could not be decoded')
     return database
-
 
   def runQuery(self, dictionary, session):
     """
@@ -241,10 +285,23 @@ class MorphoSourceImportLogic(ScriptedLoadableModuleLogic):
     print('Beginning scraping for download links')
     download_list = self.findDownload(dictionary, session)
     if download_list == None:
-        print(f"No links found for query {str(id)}")
+      print(f"No links found for query {str(id)}")
+      return pd.DataFrame()
     else:
-        print(pd.DataFrame(download_list))
-
+      validResults = self.checkValidResults(pd.DataFrame(download_list))
+      return validResults
+  
+        
+  def checkValidResults(self, dataFrame):
+    # only return meshes with a download link
+    downloadInfo=dataFrame.download_link
+    validFileIndexes=[]
+    for i in range(downloadInfo.size):
+      if 'http' in downloadInfo[i]:
+        validFileIndexes.append(i)
+    return dataFrame.iloc[validFileIndexes].reset_index()
+      
+    
   def runLogin(self, username, password):
     session_requests = requests.session()
     login_url = 'http://www.morphosource.org/LoginReg/login'
