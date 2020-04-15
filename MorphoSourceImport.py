@@ -31,7 +31,6 @@ except:
   slicer.util.pip_install('pandas')
   import pandas 
 
-
 class MorphoSourceImport(ScriptedLoadableModule):
   """Uses ScriptedLoadableModule base class, available at:
   https://github.com/Slicer/Slicer/blob/master/Base/Python/slicer/ScriptedLoadableModule.py
@@ -51,7 +50,6 @@ This module was developed by Sara Rolfe and  Murat Maga, for the NSF HDR  grant,
 https://www.nsf.gov/awardsearch/showAward?AWD_ID=1939505&HistoricalAwards=false
 """
 
-
 #
 # MorphoSourceImportWidget
 #
@@ -60,7 +58,6 @@ class MorphoSourceImportWidget(ScriptedLoadableModuleWidget):
   """Uses ScriptedLoadableModuleWidget base class, available at:
   https://github.com/Slicer/Slicer/blob/master/Base/Python/slicer/ScriptedLoadableModule.py
   """
-
   def setup(self):
     ScriptedLoadableModuleWidget.setup(self)
     # Instantiate and connect widgets ...
@@ -246,11 +243,15 @@ class MorphoSourceImportLogic(ScriptedLoadableModuleLogic):
   def runImport(self, dataFrame, session):
     for index in dataFrame.index:
       print('Downloading file for specimen ID ' + dataFrame['specimen_id'][index])
-      response = session.get(dataFrame['download_link'][index])
-      zip_file = zipfile.ZipFile(io.BytesIO(response.content))
-      extensions = ('.stl','.ply', '.obj')
-      model=[zip_file.extract(file,slicer.app.defaultScenePath) for file in zip_file.namelist() if file.endswith(extensions)]
-      slicer.util.loadModel(model[0])
+   
+      try: 
+        response = session.get(dataFrame['download_link'][index])
+        zip_file = zipfile.ZipFile(io.BytesIO(response.content))
+        extensions = ('.stl','.ply', '.obj')
+        model=[zip_file.extract(file,slicer.app.defaultScenePath) for file in zip_file.namelist() if file.endswith(extensions)]
+        slicer.util.loadModel(model[0])
+      except:
+        print('Error downloading file. Please confirm login information is correct.')
      
   def process_json(self,response_json, session):
     #Initializing the database
