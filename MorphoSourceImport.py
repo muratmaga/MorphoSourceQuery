@@ -13,6 +13,7 @@ import warnings
 from requests.packages.urllib3.exceptions import InsecureRequestWarning
 import zipfile
 import io
+import pandas
 
 #
 # MorphoSourceImport
@@ -48,10 +49,10 @@ https://www.nsf.gov/awardsearch/showAward?AWD_ID=1939505&HistoricalAwards=false
   def checkPythonPackages(self):
     print('Checking for required python packages')
     try:
-      import pandas as pd
+      import pandas
     except:
       slicer.util.pip_install('pandas')
-    import pandas as pd
+    import pandas
 
 #
 # MorphoSourceImportWidget
@@ -305,9 +306,9 @@ class MorphoSourceImportLogic(ScriptedLoadableModuleLogic):
     download_list = self.findDownload(dictionary, session)
     if download_list == None:
       print(f"No links found for query {str(id)}")
-      return pd.DataFrame()
+      return pandas.DataFrame()
     else:
-      validResults = self.checkValidResults(pd.DataFrame(download_list))
+      validResults = self.checkValidResults(pandas.DataFrame(download_list))
       return validResults
   
         
