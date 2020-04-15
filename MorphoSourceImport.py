@@ -8,7 +8,6 @@ import logging
 import numpy as np
 import string
 import requests
-import pandas as pd
 import math
 import warnings
 from requests.packages.urllib3.exceptions import InsecureRequestWarning
@@ -41,6 +40,15 @@ This module provides a keyword search to query and load 3D models from the Morph
 This module was developed by Sara Rolfe and Murat Maga, for the NSF HDR  grant, "Biology Guided Neural Networks" (Award Number: 1939505).
 https://www.nsf.gov/awardsearch/showAward?AWD_ID=1939505&HistoricalAwards=false
 """
+    slicer.app.connect("startupCompleted()", self.checkPythonPackages)
+  
+  def checkPythonPackages(self):
+    print('Checking for required python packages')
+    try:
+      import pandas as pd
+    except:
+      slicer.util.pip_install('pandas')
+    import pandas as pd
 
 #
 # MorphoSourceImportWidget
@@ -137,6 +145,7 @@ class MorphoSourceImportWidget(ScriptedLoadableModuleWidget):
     self.resultsTable = qt.QTableView()
     self.resultsTable.horizontalHeader().stretchLastSection = True
     self.resultsTable.horizontalHeader().visible = False
+    self.resultsTable.verticalHeader().visible = False
     self.resultsTable.setSelectionBehavior(qt.QAbstractItemView().SelectRows)
     self.resultsTable.setModel(self.resultsModel)
     resultsFormLayout.addRow(self.resultsTable)
@@ -299,7 +308,7 @@ class MorphoSourceImportLogic(ScriptedLoadableModuleLogic):
     for i in range(downloadInfo.size):
       if 'http' in downloadInfo[i]:
         validFileIndexes.append(i)
-    return dataFrame.iloc[validFileIndexes].reset_index()
+    return dataFrame.iloc[validFileIndexes].reset_index(drop=True)
       
     
   def runLogin(self, username, password):
