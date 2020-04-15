@@ -12,6 +12,7 @@ import math
 import warnings
 from requests.packages.urllib3.exceptions import InsecureRequestWarning
 import zipfile
+import io
 
 #
 # MorphoSourceImport
@@ -243,20 +244,13 @@ class MorphoSourceImportLogic(ScriptedLoadableModuleLogic):
   Uses ScriptedLoadableModuleLogic base class, available at:
   https://github.com/Slicer/Slicer/blob/master/Base/Python/slicer/ScriptedLoadableModule.py
   """
-  def runImport(self, dataFrame, session_requests):
-    print(dataFrame.download_link)
-    for index in dataFrame.index:
-      print('Downloading file for specimen ID ' + dataFrame['specimen_id'][index])
-      print('from: ' + dataFrame['download_link'][index])
-      file_result = session_requests.get(dataFrame['download_link'][index])
-      zipFilePath=os.path.join(slicer.app.temporaryPath, dataFrame['specimen_id'][index]+'.zip')
-      file = open(zipFilePath, 'wb')
-      file.write(file_result.content)
-      file.close()
-      with zipfile.ZipFile(zipFilePath, 'r') as zipObject:
-        zipObject.extractall(slicer.app.temporaryPath)
-        listOfFileNames = zipObj.namelist()
-        slicer.util.loadModel(os.path.join(slicer.app.temporaryPath, listOfFileNames[0]))
+  
+  def runImport(self, dataFrame, session):
+    response = session.get(dataFrame.iloc[0].at['download_link'])
+    zip_file = zipfile.ZipFile(io.BytesIO(response.content))
+    extensions = ('.stl','.ply', '.obj')
+    model=[zip_file.extract(file,slicer.app.defaultScenePath) for file in zip_file.namelist() if file.endswith(extensions)]
+    slicer.util.loadModel(model[0])
      
   def process_json(self,response_json, session):
     #Initializing the database
@@ -330,7 +324,7 @@ class MorphoSourceImportLogic(ScriptedLoadableModuleLogic):
     login_url = 'http://www.morphosource.org/LoginReg/login'
     headers = {'Content-Type': 'application/x-www-form-urlencoded'}
     data = 'username=' + username +'&password=' + password
-    login_result = session_requests.post(login_url, headers = headers, data = data, verify= False) #I modified this part for tests, but we should probably talk about SSL certification
+    login_result = session_requests.post(login_url, params= data, verify= False)
     print("Attempting log in: ", login_result.ok)
     return session_requests
 
