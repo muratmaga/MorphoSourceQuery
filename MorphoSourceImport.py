@@ -190,7 +190,7 @@ class MorphoSourceImportWidget(ScriptedLoadableModuleWidget):
 
   def onSubmitQuery(self):
       self.resultsTable.model().clear() # clear result from any previous run
-      queryDictionary =	{
+      queryDictionary =  {
         "order": self.orderInput.text,
         "element": self.elementInput.text
       }
@@ -246,11 +246,13 @@ class MorphoSourceImportLogic(ScriptedLoadableModuleLogic):
   """
   
   def runImport(self, dataFrame, session):
-    response = session.get(dataFrame.iloc[0].at['download_link'])
-    zip_file = zipfile.ZipFile(io.BytesIO(response.content))
-    extensions = ('.stl','.ply', '.obj')
-    model=[zip_file.extract(file,slicer.app.defaultScenePath) for file in zip_file.namelist() if file.endswith(extensions)]
-    slicer.util.loadModel(model[0])
+    for index in dataFrame.index:
+      print('Downloading file for specimen ID ' + dataFrame['specimen_id'][index])
+      response = session.get(dataFrame.iloc[index].at['download_link'])
+      zip_file = zipfile.ZipFile(io.BytesIO(response.content))
+      extensions = ('.stl','.ply', '.obj')
+      model=[zip_file.extract(file,slicer.app.defaultScenePath) for file in zip_file.namelist() if file.endswith(extensions)]
+      slicer.util.loadModel(model[0])
      
   def process_json(self,response_json, session):
     #Initializing the database
