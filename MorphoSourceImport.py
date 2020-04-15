@@ -24,6 +24,13 @@ warnings.simplefilter('ignore',InsecureRequestWarning)
 slicer.userNameDefault = "SlicerMorph@gmail.com"
 slicer.passwordDefault = ""
 
+# check for required python packages
+try:
+  import pandas
+except:
+  slicer.util.pip_install('pandas')
+  import pandas 
+
 
 class MorphoSourceImport(ScriptedLoadableModule):
   """Uses ScriptedLoadableModule base class, available at:
@@ -43,15 +50,7 @@ This module provides a keyword search to query and load 3D models from the Morph
 This module was developed by Sara Rolfe and  Murat Maga, for the NSF HDR  grant, "Biology Guided Neural Networks" (Award Number: 1939505).
 https://www.nsf.gov/awardsearch/showAward?AWD_ID=1939505&HistoricalAwards=false
 """
-    slicer.app.connect("startupCompleted()", self.checkPythonPackages)
-  
-  def checkPythonPackages(self):
-    print('Checking for required python packages')
-    try:
-      import pandas as pd
-    except:
-      slicer.util.pip_install('pandas')
-    import pandas as pd
+
 
 #
 # MorphoSourceImportWidget
@@ -64,7 +63,6 @@ class MorphoSourceImportWidget(ScriptedLoadableModuleWidget):
 
   def setup(self):
     ScriptedLoadableModuleWidget.setup(self)
-
     # Instantiate and connect widgets ...
     #
     # Input/Export Area
@@ -248,7 +246,7 @@ class MorphoSourceImportLogic(ScriptedLoadableModuleLogic):
   def runImport(self, dataFrame, session):
     for index in dataFrame.index:
       print('Downloading file for specimen ID ' + dataFrame['specimen_id'][index])
-      response = session.get(dataFrame.iloc[index].at['download_link'])
+      response = session.get(dataFrame['download_link'][index])
       zip_file = zipfile.ZipFile(io.BytesIO(response.content))
       extensions = ('.stl','.ply', '.obj')
       model=[zip_file.extract(file,slicer.app.defaultScenePath) for file in zip_file.namelist() if file.endswith(extensions)]
@@ -305,9 +303,9 @@ class MorphoSourceImportLogic(ScriptedLoadableModuleLogic):
     download_list = self.findDownload(dictionary, session)
     if download_list == None:
       print(f"No links found for query {str(id)}")
-      return pd.DataFrame()
+      return pandas.DataFrame()
     else:
-      validResults = self.checkValidResults(pd.DataFrame(download_list))
+      validResults = self.checkValidResults(pandas.DataFrame(download_list))
       return validResults
   
         
