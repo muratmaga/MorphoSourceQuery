@@ -11,6 +11,8 @@ import requests
 import math
 import warnings
 from requests.packages.urllib3.exceptions import InsecureRequestWarning
+import zipfile
+
 #
 # MorphoSourceImport
 #
@@ -37,7 +39,7 @@ class MorphoSourceImport(ScriptedLoadableModule):
 This module provides a keyword search to query and load 3D models from the MorphoSource database into the 3D Slicer scene.
 """
     self.parent.acknowledgementText = """
-This module was developed by Sara Rolfe and Murat Maga, for the NSF HDR  grant, "Biology Guided Neural Networks" (Award Number: 1939505).
+This module was developed by Sara Rolfe and  Murat Maga, for the NSF HDR  grant, "Biology Guided Neural Networks" (Award Number: 1939505).
 https://www.nsf.gov/awardsearch/showAward?AWD_ID=1939505&HistoricalAwards=false
 """
     slicer.app.connect("startupCompleted()", self.checkPythonPackages)
@@ -214,7 +216,7 @@ class MorphoSourceImportWidget(ScriptedLoadableModuleWidget):
       selectionList.append(selection[i].row())
     selectedResults = self.result_dataframe.iloc[selectionList]
     logic = MorphoSourceImportLogic()
-    logic.runImport(selectedResults)
+    logic.runImport(selectedResults, self.session)
     
 class LogDataObject:
   """This class i
@@ -241,8 +243,20 @@ class MorphoSourceImportLogic(ScriptedLoadableModuleLogic):
   Uses ScriptedLoadableModuleLogic base class, available at:
   https://github.com/Slicer/Slicer/blob/master/Base/Python/slicer/ScriptedLoadableModule.py
   """
-  def runImport(self, dataFrame):
+  def runImport(self, dataFrame, session_requests):
     print(dataFrame.download_link)
+    for index in dataFrame.index:
+      print('Downloading file for specimen ID ' + dataFrame['specimen_id'][index])
+      print('from: ' + dataFrame['download_link'][index])
+      file_result = session_requests.get(dataFrame['download_link'][index])
+      zipFilePath=os.path.join(slicer.app.temporaryPath, dataFrame['specimen_id'][index]+'.zip')
+      file = open(zipFilePath, 'wb')
+      file.write(file_result.content)
+      file.close()
+      with zipfile.ZipFile(zipFilePath, 'r') as zipObject:
+        zipObject.extractall(slicer.app.temporaryPath)
+        listOfFileNames = zipObj.namelist()
+        slicer.util.loadModel(os.path.join(slicer.app.temporaryPath, listOfFileNames[0]))
      
   def process_json(self,response_json, session):
     #Initializing the database
