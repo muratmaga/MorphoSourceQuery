@@ -20,6 +20,8 @@ import io
 #define global variable for default login
 base_url = "https://www.morphosource.org/api/v1/find/"
 end_url = "&sort=specimen.element,taxonomy_names.ht_order"
+base_specimen_page_url ='https://www.morphosource.org/Detail/SpecimenDetail/show/specimen_id'
+
 warnings.simplefilter('ignore',InsecureRequestWarning)
 slicer.userNameDefault = "SlicerMorph@gmail.com"
 slicer.passwordDefault = ""
@@ -29,7 +31,7 @@ try:
   import pandas
 except:
   slicer.util.pip_install('pandas')
-  import pandas 
+  import pandas
 
 class MorphoSourceImport(ScriptedLoadableModule):
   """Uses ScriptedLoadableModule base class, available at:
@@ -60,6 +62,9 @@ class MorphoSourceImportWidget(ScriptedLoadableModuleWidget):
   """
   def setup(self):
     ScriptedLoadableModuleWidget.setup(self)
+
+    self.specimen_pages = []
+
     # Instantiate and connect widgets ...
     #
     # Input/Export Area
@@ -129,7 +134,7 @@ class MorphoSourceImportWidget(ScriptedLoadableModuleWidget):
     self.submitQueryButton.toolTip = "Query the MorphoSource database for 3D models. This may take a few minutes."
     self.submitQueryButton.enabled = False
     parametersFormLayout.addRow(self.submitQueryButton)
-    
+
     #
     # Query results area
     #
@@ -148,6 +153,11 @@ class MorphoSourceImportWidget(ScriptedLoadableModuleWidget):
     self.resultsTable.setModel(self.resultsModel)
     resultsFormLayout.addRow(self.resultsTable)
 
+    self.openSpecimenPageButton = qt.QPushButton("Open specimen page")
+    self.openSpecimenPageButton.toolTip = "Open the MorphoSource page for the selected specimen"
+    self.openSpecimenPageButton.enabled = False
+    resultsFormLayout.addRow(self.openSpecimenPageButton)
+
     self.loadResultsButton = qt.QPushButton("Load selected models")
     self.loadResultsButton.toolTip = "Load the selected models into the scene."
     self.loadResultsButton.enabled = False
@@ -161,6 +171,8 @@ class MorphoSourceImportWidget(ScriptedLoadableModuleWidget):
     self.orderInput.connect('textChanged(const QString &)', self.onQueryStringChanged)
     self.elementInput.connect('textChanged(const QString &)', self.onQueryStringChanged)
     self.submitQueryButton.connect('clicked(bool)', self.onSubmitQuery)
+    self.resultsTable.selectionModel().connect('selectionChanged(QItemSelection,QItemSelection)', self.onSelectionChanged)
+    self.openSpecimenPageButton.connect('clicked(bool)', self.onOpenSpecimenPage)
     self.loadResultsButton.connect('clicked(bool)', self.onLoadResults)
 
     # Add vertical spacer
@@ -204,7 +216,26 @@ class MorphoSourceImportWidget(ScriptedLoadableModuleWidget):
         item = qt.QStandardItem()
         item.setText(self.result_dataframe.iloc[i,j])
         self.resultsModel.setItem(i, j, item)
-  
+
+  def onSelectionChanged(self, selection, oldSelection):
+    self.openSpecimenPageButton.enabled = len(self.resultsTable.selectionModel().selectedRows()) == 1
+
+  def onOpenSpecimenPage(self):
+    selection = self.resultsTable.selectionModel().selectedRows()
+    row = selection[0].row()
+    specimen_id = self.result_dataframe.iloc[row].specimen_id
+    url = base_specimen_page_url + '/' + specimen_id
+    specimen_page = slicer.qSlicerWebWidget()
+    geometry = slicer.util.mainWindow().geometry
+    geometry.setLeft(geometry.left() + 50)
+    geometry.setTop(geometry.top() + 50)
+    geometry.setWidth(1080)
+    geometry.setHeight(990)
+    specimen_page.setGeometry(geometry)
+    specimen_page.url = url
+    specimen_page.show()
+    self.specimen_pages.append(specimen_page)
+
   def onLoadResults(self):
     selection = self.resultsTable.selectionModel().selectedRows()
     selectionList = []
@@ -213,7 +244,7 @@ class MorphoSourceImportWidget(ScriptedLoadableModuleWidget):
     selectedResults = self.result_dataframe.iloc[selectionList]
     logic = MorphoSourceImportLogic()
     logic.runImport(selectedResults, self.session)
-    
+
 class LogDataObject:
   """This class i
      """
@@ -239,12 +270,12 @@ class MorphoSourceImportLogic(ScriptedLoadableModuleLogic):
   Uses ScriptedLoadableModuleLogic base class, available at:
   https://github.com/Slicer/Slicer/blob/master/Base/Python/slicer/ScriptedLoadableModule.py
   """
-  
+
   def runImport(self, dataFrame, session):
     for index in dataFrame.index:
       print('Downloading file for specimen ID ' + dataFrame['specimen_id'][index])
-   
-      try: 
+
+      try:
         response = session.get(dataFrame['download_link'][index])
         zip_file = zipfile.ZipFile(io.BytesIO(response.content))
         extensions = ('.stl','.ply', '.obj')
@@ -252,7 +283,7 @@ class MorphoSourceImportLogic(ScriptedLoadableModuleLogic):
         slicer.util.loadModel(model[0])
       except:
         print('Error downloading file. Please confirm login information is correct.')
-     
+
   def process_json(self,response_json, session):
     #Initializing the database
     database=[]
@@ -308,8 +339,8 @@ class MorphoSourceImportLogic(ScriptedLoadableModuleLogic):
     else:
       validResults = self.checkValidResults(pandas.DataFrame(download_list))
       return validResults
-  
-        
+
+
   def checkValidResults(self, dataFrame):
     # only return meshes with a download link
     downloadInfo=dataFrame.download_link
@@ -318,8 +349,8 @@ class MorphoSourceImportLogic(ScriptedLoadableModuleLogic):
       if 'http' in downloadInfo[i]:
         validFileIndexes.append(i)
     return dataFrame.iloc[validFileIndexes].reset_index(drop=True)
-      
-    
+
+
   def runLogin(self, username, password):
     session_requests = requests.session()
     login_url = 'http://www.morphosource.org/LoginReg/login'
